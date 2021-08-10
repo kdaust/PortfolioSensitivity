@@ -17,6 +17,13 @@ library(magrittr)
 source("port_functions.R")
 Rcpp::sourceCpp("port_cfns.cpp")
 
+pestMat <- fread("Pest_Host_Conifer.csv")
+pestLookup <- pestMat[,.(PestCode,PestName)]
+pestMat[,c("Group","PestName") := NULL]
+pestMat <- melt(pestMat, id.vars = "PestCode",variable.name = "Spp",value.name = "Host")
+pestMat <- na.omit(pestMat)
+pestProb <- data.table(Pest = pestLookup$PestName,Prob = 0.005)
+
 pool <- dbPool(
     drv = RPostgres::Postgres(),
     dbname = Sys.getenv("BCGOV_DB"),
@@ -105,15 +112,16 @@ ui <- fluidPage(
                             radioButtons("SI_Class","Site Index Precision Classes: ", choices = c(10,5,3,1),
                                          selected = 1, inline = T),
                             sliderInput("prob_clim","Severity of Climate Loss:", min = 0.01, max = 0.25, value = 0.08, step = 0.01),
-                            sliderInput("prob_pest","Probability of Pest Outbreak:", min = 0, max = 0.1, value = 0.02),
+                            # sliderInput("prob_pest","Probability of Pest Outbreak:", min = 0, max = 0.1, value = 0.02),
+                            rHandsontableOutput("pest_prob"),
+                            br(),
                             rHandsontableOutput("env_params"),
                             br(),
                             actionButton("run_simulation", label = "Example Simulation", icon = icon("plus-square"),
                                          style = "width:100%; background-color:#003366; color: #FFF"),
                             br(),
                             actionButton("generate_portfolio", label = "Run Portfolio", icon = icon("plus-square"),
-                                         style = "width:100%; background-color:#003366; color: #FFF"),
-                            sliderInput("sim_group", "Select Simulation to Plot: ", min = 1, max = 25, value = 1, step = 1),
+                                         style = "width:100%; background-color:#003366; color: #FFF"),                            
                             width = 3),
                mainPanel(fluidRow(
                         column(6,

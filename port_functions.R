@@ -136,7 +136,7 @@ dbGetSppLimits_kd <- function(con,SuitTable,Trees){
 
 run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
                           TimePeriods,selectBGC,SuitProb,returnValue,sppLimits,
-                          minAccept,boundDat,ProbPest,SI_Class,climLoss){
+                          minAccept,boundDat,PestSpp,ProbPest,SI_Class,climLoss){
   nSpp <- length(Trees)
   treeList <- Trees
   ss_sum_save <- data.table()
@@ -146,6 +146,7 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
     it = it+1
     ##simulate climate
     simResults <- simulateClimate_kd(climVar)
+    simPest <- sample(ProbPest$PestCode,size = 101, replace = T,prob = ProbPest$Prob)
     SS.sum <- cleanData_kd(SSPredAll,SIBEC,SuitTable,SNum, Trees, 
                         timePer = TimePeriods,selectBGC = selectBGC,SI_Class)
     ss_sum_save <- rbind(ss_sum_save,SS.sum, fill = T)
@@ -167,6 +168,7 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
       
       for (k in 1:nSpp){ ##for each tree
         DatSpp <- SS.sum[Spp == treeList[k],]
+        currPest <- PestSpp[Spp == treeList[k],PestCode]
         dat <- data.table("Period" = rescale(as.numeric(DatSpp$FuturePeriod), 
                                              to = c(2000,2085)), 
                           "SIBEC" = DatSpp$MeanSI/50, "Suit" = DatSpp$MeanSuit)
@@ -182,7 +184,7 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
         annualDat <- data.table("Growth" = s[["y"]], "MeanDead" = p[["y"]], "NoMort" = m[["y"]], "Suit" = r[["y"]]) ##create working data
         annualDat <- cbind(simResults,annualDat)
         limits <- sppLimits[Spp == treeList[k],]
-        Returns <- SimGrowth_kd(DF = annualDat,ProbPest = ProbPest,
+        Returns <- SimGrowth_kd(DF = annualDat,simPest = simPest,currPest = currPest,
                              cmdMin = limits[[1]],cmdMax = limits[[2]],
                              tempMin = limits[[3]],tempMax = limits[[4]],climLoss = climLoss)
         tmpR <- c(0,Returns)
@@ -254,6 +256,7 @@ run_simulation <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
 
   ##simulate climate
   simResults <- simulateClimate_kd(climVar)
+  SNum <- SiteList[1]
   SS.sum <- cleanData_kd(SSPredAll,SIBEC,SuitTable,SNum, Trees, 
                          timePer = TimePeriods,selectBGC = selectBGC,SI_Class)
   ss_sum_save <- rbind(ss_sum_save,SS.sum, fill = T)
@@ -272,7 +275,6 @@ run_simulation <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
   
   if(!is.null(SS.sum)){
     output <- data.table("year" = seq(2000,2100,1))
-    
     for (k in 1:nSpp){ ##for each tree
       DatSpp <- SS.sum[Spp == treeList[k],]
       dat <- data.table("Period" = rescale(as.numeric(DatSpp$FuturePeriod), 

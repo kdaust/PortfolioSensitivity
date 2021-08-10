@@ -3,6 +3,10 @@ output$env_params <- renderRHandsontable({
   rhandsontable(SuitProb)
 })
 
+output$pest_prob <- renderRHandsontable({
+  rhandsontable(pestProb)
+})
+
 observeEvent(input$generate_results, priority = 100, {
   
   ticker <- tic("Save Map Inputs")
@@ -227,6 +231,7 @@ observeEvent(input$generate_portfolio,{
   selectPer <- which(allPeriods == timePeriods)
   timePeriods <- allPeriods[1:selectPer]
   SuitProb <- as.data.table(hot_to_r(input$env_params))
+  adjPestProb <- as.data.table(hot_to_r(input$pest_prob))
   
   withProgress(message = "Optimising...", detail = "Lots of calculations...", {
     #Trees <- treeList <- c("Py","Fd","At","Pl","Sx","Bl","Cw","Hw","Pw","Ss","Lw","Ba","Hm","Dr","Mb")
@@ -241,7 +246,7 @@ observeEvent(input$generate_portfolio,{
     # bgcDat <- dbGetCCISS(pool,siteids,avg = F, scn = "ssp370")
     # sspreds <- edatopicOverlap(bgcDat,Edatope = E1) ##reuse from uData$sspreds
     # SSPredOrig <- sspreds
-    
+    #browser()
     SSPredOrig <- copy(uData$eda_out)
     SSPredOrig[,allOverlap := NULL]
     setnames(SSPredOrig, old = c("BGC","SiteRef"), new = c("MergedBGC","SiteNo"))
@@ -256,6 +261,10 @@ observeEvent(input$generate_portfolio,{
     SSPredAll <- SSPredBGC[SSPredBGC$SS_NoSpace == selectBGC,]
     SiteList <- unique(SSPredAll$SiteNo)
     SSPredAll <- SSPredAll[SiteNo %in% SiteList & !is.na(SSprob),]
+    ##process pest data
+    adjPestProb[pestLookup,PestCode := i.PestCode, on = c(Pest = "PestName")]
+    adjPestProb <- adjPestProb[,.(PestCode,Prob)]
+    adjPestProb <- rbind(adjPestProb, data.table(PestCode = "None",Prob = 0.8))
     
     incProgress()
     climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
@@ -267,7 +276,8 @@ observeEvent(input$generate_portfolio,{
     SL <- rep(SL, each = numTimes)
     port_results <- run_portfolio_kd(SL,climVar,SSPredAll,SIBEC,SuitTable,
                                   Trees,timePeriods,selectBGC,SuitProb,returnValue,
-                                  sppLimits,minAccept,boundDat,ProbPest,
+                                  sppLimits,minAccept,boundDat,PestSpp = pestMat,
+                                  ProbPest = adjPestProb,
                                   SI_Class = as.numeric(input$SI_Class),
                                   climLoss = as.numeric(input$prob_clim))
     incProgress(amount = 0.6)
@@ -289,8 +299,8 @@ output$efficient_frontier <- renderPlot({
 output$growth_sim <- renderPlot({
   if(is.null(portfolio_results$data)) return(NULL)
   dat <- copy(portfolio_results$data$simulated)
-  dat[,It := as.factor(It)]
-  dat <- dat[It == input$sim_group,]
+  # dat[,It := as.factor(It)]
+  dat <- dat[,.(Returns = mean(Returns)), by = .(Year,Spp)]
   ggplot(dat, aes(x = Year, y = Returns, color = Spp)) +
     geom_line() +
     theme_few() + 

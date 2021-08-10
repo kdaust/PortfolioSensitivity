@@ -1,8 +1,10 @@
 #include <Rcpp.h>
+#include <stdio.h>
+#include <string.h>
 using namespace Rcpp;
-
+using namespace std; 
 // [[Rcpp::export]]
-NumericVector SimGrowth_kd(DataFrame DF, double ProbPest, double cmdMin, 
+NumericVector SimGrowth_kd(DataFrame DF, vector<string> simPest, vector<string> currPest,double cmdMin, 
                         double cmdMax, double tempMin, double tempMax, double climLoss){
   NumericVector Growth = DF["Growth"]; //convert to vectors
   NumericVector NoMort  = DF["NoMort"];
@@ -14,8 +16,9 @@ NumericVector SimGrowth_kd(DataFrame DF, double ProbPest, double cmdMin,
   
   int numYears = Growth.length();
   NumericVector Returns(numYears);
-  double height, percentDead, percentRuin, climDead, climDiff, diffProp;
-  int prevTrees, numDead, i;
+  double height, percentDead, propLoss, climDead, climDiff, diffProp;
+  string yearPest;
+  int numDead, i;
   int nTrees = 100;
   for(i = 0; i < numYears; i++){
     height = sum(Growth[Rcpp::Range(0,i)]);
@@ -53,16 +56,16 @@ NumericVector SimGrowth_kd(DataFrame DF, double ProbPest, double cmdMin,
       climDead = nTrees;
     }
     nTrees = nTrees - climDead;
-    if(Rcpp::runif(1,0,1)[0] <= ProbPest){//pest outbreak
-      percentRuin = rgamma(1, Ruin[i], 0.07)[0];
-      if(percentRuin > 1){
-        percentRuin = 1;
-      }
-      numDead = percentRuin*nTrees;
+    yearPest = simPest[i];
+    if(std::find(currPest.begin(),currPest.end(),yearPest) != currPest.end()){
+      propLoss = rgamma(1, 2.5, 0.02)[0];
+      numDead = propLoss*nTrees;
       nTrees = nTrees - numDead;
-    }else if(Rcpp::runif(1,0,100)[0] > NoMort[i]){//regular environmental loss
+    }
+    
+    if(Rcpp::runif(1,0,100)[0] > NoMort[i]){//regular environmental loss
       percentDead = Rcpp::rgamma(1, 1.5, MeanDead[i])[0];
-      numDead = (percentDead/100)*prevTrees;
+      numDead = (percentDead/100)*nTrees;
       nTrees = nTrees - numDead;
     }
   }
