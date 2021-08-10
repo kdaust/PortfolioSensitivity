@@ -1,3 +1,8 @@
+
+output$env_params <- renderRHandsontable({
+  rhandsontable(SuitProb)
+})
+
 observeEvent(input$generate_results, priority = 100, {
   
   ticker <- tic("Save Map Inputs")
@@ -153,6 +158,58 @@ output$setbounds <- renderRHandsontable({
   rhandsontable(boundDat)
 })
 
+observeEvent(input$run_simulation,{
+  timePeriods <- input$port_length
+  Trees <- treeList <- input$tree_species
+  ProbPest <- input$prob_pest
+  BGC <- input$port_bgc
+  siteLoc <- input$port_ss
+  FutScn <- "ssp245"
+  SiteList <- uData$pts$Site
+  boundDat <- hot_to_r(input$setbounds)
+
+  allPeriods <- c(1961,1991,2021,2041,2061,2081)
+  selectPer <- which(allPeriods == timePeriods)
+  timePeriods <- allPeriods[1:selectPer]
+  SuitProb <- as.data.table(hot_to_r(input$env_params))
+  SuitTable <- copy(S1)
+  setnames(SuitTable,old = "Feasible",new = "Suitability",skip_absent = T)
+  SSPredOrig <- copy(uData$eda_out)
+  SSPredOrig[,allOverlap := NULL]
+  setnames(SSPredOrig, old = c("BGC","SiteRef"), new = c("MergedBGC","SiteNo"))
+  SSPredOrig <- SSPredOrig[,.(MergedBGC,SS_NoSpace,SSratio,SSprob,SS.pred,FuturePeriod,SiteNo)]
+  
+  SSPredFull <- edatopicSubset_kd(SSPredOrig,E1,pos = siteLoc) ##this should be changeable
+  nSpp <- length(treeList)
+  Units <- unique(SSPredFull$BGC_analysis)
+  SSPredBGC <- SSPredFull[BGC_analysis == BGC,-("BGC_analysis")]
+  SSList <- unique(SSPredBGC$SS_NoSpace)
+  selectBGC = SSList[1] ##this is where we change it to allow multiple BGCs
+  SSPredAll <- SSPredBGC[SSPredBGC$SS_NoSpace == selectBGC,]
+  SiteList <- unique(SSPredAll$SiteNo)
+  SSPredAll <- SSPredAll[SiteNo %in% SiteList & !is.na(SSprob),]
+  
+  climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
+  sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
+  
+  SL <- SiteList
+  port_results <- run_simulation(SL,climVar,SSPredAll,SIBEC,SuitTable,
+                                   Trees,timePeriods,selectBGC,SuitProb,
+                                   sppLimits,ProbPest,
+                                   SI_Class = as.numeric(input$SI_Class),
+                                   climLoss = as.numeric(input$prob_clim))
+  output$single_sim <- renderPlot({
+    ggplot(port_results, aes(x = Year, y = Returns, color = Spp)) +
+      geom_line() +
+      theme_few() + 
+      expand_limits(y = 0)
+  })
+  showModal(modalDialog(
+    plotOutput("single_sim"),
+    easyClose = T
+  ))
+})
+
 observeEvent(input$generate_portfolio,{
   timePeriods <- input$port_length
   returnValue <- input$return_level
@@ -169,10 +226,10 @@ observeEvent(input$generate_portfolio,{
   allPeriods <- c(1961,1991,2021,2041,2061,2081)
   selectPer <- which(allPeriods == timePeriods)
   timePeriods <- allPeriods[1:selectPer]
+  SuitProb <- as.data.table(hot_to_r(input$env_params))
   
   withProgress(message = "Optimising...", detail = "Lots of calculations...", {
     #Trees <- treeList <- c("Py","Fd","At","Pl","Sx","Bl","Cw","Hw","Pw","Ss","Lw","Ba","Hm","Dr","Mb")
-    SuitProb <- data.frame("Suit" = c(1,2,3,4), "ProbDead" = c(0.1,0.5,1,4), "NoMort" = c(95,85,75,50))
     #timePeriods = c(1961,1991,2021,2041,2061)
     #returnValue = 0.9
     #FutScn <- "ssp370"
@@ -190,7 +247,7 @@ observeEvent(input$generate_portfolio,{
     setnames(SSPredOrig, old = c("BGC","SiteRef"), new = c("MergedBGC","SiteNo"))
     SSPredOrig <- SSPredOrig[,.(MergedBGC,SS_NoSpace,SSratio,SSprob,SS.pred,FuturePeriod,SiteNo)]
     
-    SSPredFull <- edatopicSubset(SSPredOrig,E1,pos = siteLoc) ##this should be changeable
+    SSPredFull <- edatopicSubset_kd(SSPredOrig,E1,pos = siteLoc) ##this should be changeable
     nSpp <- length(treeList)
     Units <- unique(SSPredFull$BGC_analysis)
     SSPredBGC <- SSPredFull[BGC_analysis == BGC,-("BGC_analysis")]
@@ -201,16 +258,18 @@ observeEvent(input$generate_portfolio,{
     SSPredAll <- SSPredAll[SiteNo %in% SiteList & !is.na(SSprob),]
     
     incProgress()
-    climVar <- dbGetClimSum(poolclim,BGC,FutScn)
-    sppLimits <- dbGetSppLimits(poolclim,SuitTable,Trees)
+    climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
+    sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
     incProgress()
     
     SL <- SiteList
-    numTimes <- as.integer(25/length(SL))
+    numTimes <- as.integer(as.numeric(input$num_sims)/length(SL))
     SL <- rep(SL, each = numTimes)
-    port_results <- run_portfolio(SL,climVar,SSPredAll,SIBEC,SuitTable,
+    port_results <- run_portfolio_kd(SL,climVar,SSPredAll,SIBEC,SuitTable,
                                   Trees,timePeriods,selectBGC,SuitProb,returnValue,
-                                  sppLimits,minAccept,boundDat,ProbPest)
+                                  sppLimits,minAccept,boundDat,ProbPest,
+                                  SI_Class = as.numeric(input$SI_Class),
+                                  climLoss = as.numeric(input$prob_clim))
     incProgress(amount = 0.6)
     print("Done Portfolio")
     #print(port_results$raw)
