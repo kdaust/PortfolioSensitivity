@@ -204,17 +204,19 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
       ###only include species with mean return > 1 in portfolio
       use <- colnames(returns)[colMeans(returns) > 1] ###should probably be higher
       returns <- returns[,..use]
-      sigma2 <- cor(returns) ###to create cov mat from returns
-      
-      ef <- optimise_portfolio(returns, sigma2, boundDat,minAccept) 
-      setnames(ef,old = c("frontier_sd","return","sharpe"),
-               new = c("Sd","RealRet","Sharpe"))
-      ef[,Return := 1:20]
-      
-      eff_front2 <- ef
-      eff_front2[,RealRet := RealRet/max(RealRet)]
-      eff_front2[,SiteNo := SNum]
-      melt(eff_front2,id.vars = c("SiteNo", "Return"),variable.name = "Spp")
+      if(ncol(returns) > 1){
+        sigma2 <- cor(returns) ###to create cov mat from returns
+        
+        ef <- optimise_portfolio(returns, sigma2, boundDat,minAccept) 
+        setnames(ef,old = c("frontier_sd","return","sharpe"),
+                 new = c("Sd","RealRet","Sharpe"))
+        ef[,Return := 1:20]
+        
+        eff_front2 <- ef
+        eff_front2[,RealRet := RealRet/max(RealRet)]
+        eff_front2[,SiteNo := SNum]
+        melt(eff_front2,id.vars = c("SiteNo", "Return"),variable.name = "Spp")
+      }else NULL
     }else{NULL}
   }
   
