@@ -148,7 +148,7 @@ observeEvent(input$port_bgc,{
     suitTrees <- suitTrees[NewSuit %in% c(1,2,3,4),.(Spp, BGC = ZoneSubzone)]
     suitTrees <- unique(suitTrees)
     tree_opts <- suitTrees[BGC == input$port_bgc,Spp]
-    tree_opts <- tree_opts[tree_opts != "Ac"]
+    tree_opts <- tree_opts[!tree_opts %in% c("Ac","Sb")]
     updateSelectInput(inputId = "tree_species",
                       choices = tree_opts,selected = tree_opts)
   }
@@ -160,6 +160,16 @@ output$setbounds <- renderRHandsontable({
   boundDat <- data.table(Spp = Trees)
   boundDat[,`:=`(minWt = 0, maxWt = 1)]
   rhandsontable(boundDat)
+})
+
+observeEvent(input$get_clim,{
+  BGC <- input$port_bgc
+  FutScn <- "ssp245"
+  SuitTable <- copy(S1)
+  setnames(SuitTable,old = "Feasible",new = "Suitability",skip_absent = T)
+  Trees <- treeList <- input$tree_species
+  portfolio_results$climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
+  portfolio_results$sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
 })
 
 observeEvent(input$run_simulation,{
@@ -176,12 +186,16 @@ observeEvent(input$run_simulation,{
   selectPer <- which(allPeriods == timePeriods)
   timePeriods <- allPeriods[1:selectPer]
   SuitProb <- as.data.table(hot_to_r(input$env_params))
+  adjPestProb <- as.data.table(hot_to_r(input$pest_prob))
   SuitTable <- copy(S1)
   setnames(SuitTable,old = "Feasible",new = "Suitability",skip_absent = T)
   SSPredOrig <- copy(uData$eda_out)
   SSPredOrig[,allOverlap := NULL]
   setnames(SSPredOrig, old = c("BGC","SiteRef"), new = c("MergedBGC","SiteNo"))
   SSPredOrig <- SSPredOrig[,.(MergedBGC,SS_NoSpace,SSratio,SSprob,SS.pred,FuturePeriod,SiteNo)]
+  adjPestProb[pestLookup,PestCode := i.PestCode, on = c(Pest = "PestName")]
+  adjPestProb <- adjPestProb[,.(PestCode,Prob)]
+  adjPestProb <- rbind(adjPestProb, data.table(PestCode = "None",Prob = 0.8))
   
   SSPredFull <- edatopicSubset_kd(SSPredOrig,E1,pos = siteLoc) ##this should be changeable
   nSpp <- length(treeList)
@@ -193,25 +207,33 @@ observeEvent(input$run_simulation,{
   SiteList <- unique(SSPredAll$SiteNo)
   SSPredAll <- SSPredAll[SiteNo %in% SiteList & !is.na(SSprob),]
   
-  climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
-  sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
-  
-  SL <- SiteList
-  port_results <- run_simulation(SL,climVar,SSPredAll,SIBEC,SuitTable,
+  if(is.null(portfolio_results$climVar)){
+    showModal(modalDialog(
+      h2("Please get climate data first by clicking the above button")
+    ))
+  }else{
+    climVar <- portfolio_results$climVar
+    sppLimits <- portfolio_results$sppLimits
+    
+    SL <- SiteList
+    port_results <- run_simulation(SL,climVar,SSPredAll,SIBEC,SuitTable,
                                    Trees,timePeriods,selectBGC,SuitProb,
-                                   sppLimits,ProbPest,
+                                   sppLimits,PestSpp = pestMat,
+                                   ProbPest = adjPestProb,
                                    SI_Class = as.numeric(input$SI_Class),
                                    climLoss = as.numeric(input$prob_clim))
-  output$single_sim <- renderPlot({
-    ggplot(port_results, aes(x = Year, y = Returns, color = Spp)) +
-      geom_line() +
-      theme_few() + 
-      expand_limits(y = 0)
-  })
-  showModal(modalDialog(
-    plotOutput("single_sim"),
-    easyClose = T
-  ))
+    output$single_sim <- renderPlot({
+      ggplot(port_results, aes(x = Year, y = Returns, color = Spp)) +
+        geom_line() +
+        theme_few() + 
+        expand_limits(y = 0)
+    })
+    showModal(modalDialog(
+      plotOutput("single_sim"),
+      easyClose = T
+    ))
+  }
+  
 })
 
 observeEvent(input$generate_portfolio,{
@@ -267,23 +289,28 @@ observeEvent(input$generate_portfolio,{
     adjPestProb <- rbind(adjPestProb, data.table(PestCode = "None",Prob = 0.8))
     
     incProgress()
-    climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
-    sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
-    incProgress()
+    if(is.null(portfolio_results$climVar)){
+      showModal(modalDialog(
+        h2("Please get climate data first by clicking the above button")
+      ))
+    }else{
+      climVar <- portfolio_results$climVar
+      sppLimits <- portfolio_results$sppLimits
     
-    SL <- SiteList
-    numTimes <- as.integer(as.numeric(input$num_sims)/length(SL))
-    SL <- rep(SL, each = numTimes)
-    port_results <- run_portfolio_kd(SL,climVar,SSPredAll,SIBEC,SuitTable,
-                                  Trees,timePeriods,selectBGC,SuitProb,returnValue,
-                                  sppLimits,minAccept,boundDat,PestSpp = pestMat,
-                                  ProbPest = adjPestProb,
-                                  SI_Class = as.numeric(input$SI_Class),
-                                  climLoss = as.numeric(input$prob_clim))
-    incProgress(amount = 0.6)
-    print("Done Portfolio")
-    #print(port_results$raw)
-    portfolio_results$data <- port_results
+      SL <- SiteList
+      numTimes <- as.integer(as.numeric(input$num_sims)/length(SL))
+      SL <- rep(SL, each = numTimes)
+      port_results <- run_portfolio_kd(SL,climVar,SSPredAll,SIBEC,SuitTable,
+                                    Trees,timePeriods,selectBGC,SuitProb,returnValue,
+                                    sppLimits,minAccept,boundDat,PestSpp = pestMat,
+                                    ProbPest = adjPestProb,
+                                    SI_Class = as.numeric(input$SI_Class),
+                                    climLoss = as.numeric(input$prob_clim))
+      incProgress(amount = 0.6)
+      print("Done Portfolio")
+      #print(port_results$raw)
+      portfolio_results$data <- port_results
+    }
   })
   
 })

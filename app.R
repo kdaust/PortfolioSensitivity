@@ -103,6 +103,8 @@ ui <- fluidPage(
                             radioButtons("port_length",label = "Optimisation Period (Rotation Length):",
                                          choiceNames = c("Current Period","20 Year","40 Year","60 Year","80 Year"),
                                          choiceValues = c(1991,2021,2041,2061,2081)),
+                            actionButton("get_clim", label = "Get Climatic Limits", icon = icon("plus-square"),
+                                         style = "width:100%; background-color:#003366; color: #FFF"),
                             h2("Portfolio Parameters"),
                             rHandsontableOutput("setbounds"),
                             sliderInput("return_level","Specified Return:", min = 0.5, max = 1,value = 0.9),
@@ -147,7 +149,7 @@ server <- function(input, output,session) {
     tOut <- st_read("./TileOutline.gpkg")
     tOut2 <- st_read("./RCB_Outline.gpkg")
     tOut <- st_union(tOut,tOut2)
-    portfolio_results <- reactiveValues(data = NULL)
+    portfolio_results <- reactiveValues(data = NULL,climVar = NULL,sppLimits = NULL)
     source("Server.R", local = TRUE)
     source("points.R", local = TRUE)
     source("generate.R", local = TRUE)
