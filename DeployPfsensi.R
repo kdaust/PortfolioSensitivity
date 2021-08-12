@@ -1,0 +1,15 @@
+library(analogsea)
+Sys.setenv(DO_PAT="eae4166ed2fac0e3c41660fe26a009bb0176ab8bceeaf753faf5189f58a06520")
+
+temp <- analogsea::droplets()
+server <- temp$`shiny-server`
+analogsea::droplet_ssh(server,"rm -R /srv/shiny-server/pfsensi")
+analogsea::droplet_ssh(server, "mkdir /srv/shiny-server/pfsensi")
+analogsea::droplet_upload(server, "./ui.R", "/srv/shiny-server/pfsensi/ui.R")
+analogsea::droplet_upload(server, "./server.R", "/srv/shiny-server/pfsensi/server.R")
+analogsea::droplet_upload(server, "./.Renviron", "/srv/shiny-server/pfsensi/.Renviron")
+analogsea::droplet_upload(server, "./ServerFiles", "/srv/shiny-server/pfsensi")
+analogsea::droplet_upload(server, "./inputs", "/srv/shiny-server/pfsensi")
+analogsea::droplet_upload(server, "./htmlwidgets", "/srv/shiny-server/pfsensi")
+analogsea::droplet_ssh(server, "chown -R shiny:shiny /srv/shiny-server")
+analogsea::droplet_ssh(server, "systemctl restart shiny-server")

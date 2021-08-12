@@ -137,7 +137,7 @@ dbGetSppLimits_kd <- function(con,SuitTable,Trees){
 
 run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
                           TimePeriods,selectBGC,SuitProb,returnValue,sppLimits,
-                          minAccept,boundDat,PestSpp,ProbPest,SI_Class,climLoss){
+                          minAccept,boundDat,PestSpp,ProbPest,SI_Class,climLoss,simCovMat){
   nSpp <- length(Trees)
   treeList <- Trees
   ss_sum_save <- data.table()
@@ -170,6 +170,7 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
       for (k in 1:nSpp){ ##for each tree
         DatSpp <- SS.sum[Spp == treeList[k],]
         currPest <- PestSpp[Spp == treeList[k],PestCode]
+        currClimLoss <- climLoss[Spp == treeList[k],LossSeverity]
         dat <- data.table("Period" = rescale(as.numeric(DatSpp$FuturePeriod), 
                                              to = c(2000,2085)), 
                           "SIBEC" = DatSpp$MeanSI/50, "Suit" = DatSpp$MeanSuit)
@@ -187,7 +188,7 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
         limits <- sppLimits[Spp == treeList[k],]
         Returns <- SimGrowth_kd(DF = annualDat,simPest = simPest,currPest = currPest,
                              cmdMin = limits[[1]],cmdMax = limits[[2]],
-                             tempMin = limits[[3]],tempMax = limits[[4]],climLoss = climLoss)
+                             tempMin = limits[[3]],tempMax = limits[[4]],climLoss = currClimLoss)
         tmpR <- c(0,Returns)
         assets <- Returns - tmpR[-length(tmpR)]
         temp <- data.frame(Spp = treeList[k], 
@@ -205,7 +206,11 @@ run_portfolio_kd <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
       use <- colnames(returns)[colMeans(returns) > 1] ###should probably be higher
       returns <- returns[,..use]
       if(ncol(returns) > 1){
-        sigma2 <- cor(returns) ###to create cov mat from returns
+        if(simCovMat){
+          sigma2 <- cor(returns) ###to create cov mat from returns
+        }else{
+          sigma2 <- covMat[names(returns),names(returns)] ##cov mat from feasibility
+        }
         
         ef <- optimise_portfolio(returns, sigma2, boundDat,minAccept) 
         setnames(ef,old = c("frontier_sd","return","sharpe"),
@@ -282,6 +287,7 @@ run_simulation <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
     for (k in 1:nSpp){ ##for each tree
       DatSpp <- SS.sum[Spp == treeList[k],]
       currPest <- PestSpp[Spp == treeList[k],PestCode]
+      currClimLoss <- climLoss[Spp == treeList[k],LossSeverity]
       dat <- data.table("Period" = rescale(as.numeric(DatSpp$FuturePeriod), 
                                            to = c(2000,2085)), 
                         "SIBEC" = DatSpp$MeanSI/50, "Suit" = DatSpp$MeanSuit)
@@ -299,7 +305,7 @@ run_simulation <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
       limits <- sppLimits[Spp == treeList[k],]
       Returns <- SimGrowth_kd(DF = annualDat,simPest = simPest,currPest = currPest,
                               cmdMin = limits[[1]],cmdMax = limits[[2]],
-                              tempMin = limits[[3]],tempMax = limits[[4]],climLoss = climLoss)
+                              tempMin = limits[[3]],tempMax = limits[[4]],climLoss = currClimLoss)
       tmpR <- c(0,Returns)
       assets <- Returns - tmpR[-length(tmpR)]
       temp <- data.frame(Spp = treeList[k], 
@@ -332,3 +338,14 @@ run_simulation <- function(SiteList,climVar,SSPredAll,SIBEC,SuitTable,Trees,
 #     theme_few()+
 #     facet_wrap(.~Unit, scales = "free_x")
 # }
+
+##create covariance matrix
+# dat <- copy(S1)
+# bgcInfo <- fread("~/CommonTables/All_BGCs_Info_v12_2.csv")
+# bcBGCS <- bgcInfo[DataSet == "BC",BGC]
+# dat <- dat[BGC %chin% bcBGCS,]
+# dat2 <- dcast(dat,SS_NoSpace ~ Spp, value.var = "Feasible", fun.aggregate = mean)
+# dat2[,SS_NoSpace := NULL]
+# dat2 <- as.matrix(dat2)
+# dat2[is.nan(dat2)] <- 5
+# covMat <- cor(dat2)

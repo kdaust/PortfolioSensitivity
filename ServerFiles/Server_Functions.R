@@ -127,7 +127,7 @@ cciss <- function(bgc) {
 }
 
 #####portfolio#####
-makeColScale <- function(Trees){
+makeColScale <- function(Trees){ ##make a new one of these for the line graphs
   cols <- TreeCols
   myPal <- cols$HexColour
   names(myPal) <- cols$TreeCode
@@ -137,6 +137,19 @@ makeColScale <- function(Trees){
   pal <- myColours$HexColour
   names(pal) <- myColours$TreeCode
   colScale <- scale_fill_manual(name = "variable", values = pal)
+  return(colScale)
+}
+
+makeColScale_line <- function(Trees){ ##make a new one of these for the line graphs
+  cols <- TreeCols
+  myPal <- cols$HexColour
+  names(myPal) <- cols$TreeCode
+  myColours <- data.table(TreeCode = Trees)
+  myColours <- cols[myColours, on = "TreeCode"]
+  myColours <- myColours[!is.na(HexColour),]
+  pal <- myColours$HexColour
+  names(pal) <- myColours$TreeCode
+  colScale <- scale_colour_manual(name = "Spp", values = pal)
   return(colScale)
 }
 
@@ -162,14 +175,22 @@ output$setbounds <- renderRHandsontable({
   rhandsontable(boundDat)
 })
 
+output$setclimbounds <- renderRHandsontable({
+  Trees <- input$tree_species
+  dat <- data.table(Spp = Trees,LossSeverity = 0.08)
+  rhandsontable(dat)
+})
+
 observeEvent(input$get_clim,{
   BGC <- input$port_bgc
   FutScn <- "ssp245"
   SuitTable <- copy(S1)
   setnames(SuitTable,old = "Feasible",new = "Suitability",skip_absent = T)
   Trees <- treeList <- input$tree_species
+  show_modal_spinner()
   portfolio_results$climVar <- dbGetClimSum_kd(poolclim,BGC,FutScn)
   portfolio_results$sppLimits <- dbGetSppLimits_kd(poolclim,SuitTable,Trees)
+  remove_modal_spinner()
 })
 
 observeEvent(input$run_simulation,{
@@ -181,6 +202,7 @@ observeEvent(input$run_simulation,{
   FutScn <- "ssp245"
   SiteList <- uData$pts$Site
   boundDat <- hot_to_r(input$setbounds)
+  climLoss <- as.data.table(hot_to_r(input$setclimbounds))
 
   allPeriods <- c(1961,1991,2021,2041,2061,2081)
   selectPer <- which(allPeriods == timePeriods)
@@ -221,10 +243,12 @@ observeEvent(input$run_simulation,{
                                    sppLimits,PestSpp = pestMat,
                                    ProbPest = adjPestProb,
                                    SI_Class = as.numeric(input$SI_Class),
-                                   climLoss = as.numeric(input$prob_clim))
+                                   climLoss = climLoss)
     output$single_sim <- renderPlot({
+      colScale <- makeColScale_line(unique(port_results$Spp))
       ggplot(port_results, aes(x = Year, y = Returns, color = Spp)) +
         geom_line() +
+        colScale +
         theme_few() + 
         expand_limits(y = 0)
     })
@@ -254,6 +278,8 @@ observeEvent(input$generate_portfolio,{
   timePeriods <- allPeriods[1:selectPer]
   SuitProb <- as.data.table(hot_to_r(input$env_params))
   adjPestProb <- as.data.table(hot_to_r(input$pest_prob))
+  climLoss <- as.data.table(hot_to_r(input$setclimbounds))
+  simCovMat <- input$cov_type
   
   withProgress(message = "Optimising...", detail = "Lots of calculations...", {
     #Trees <- treeList <- c("Py","Fd","At","Pl","Sx","Bl","Cw","Hw","Pw","Ss","Lw","Ba","Hm","Dr","Mb")
@@ -305,7 +331,7 @@ observeEvent(input$generate_portfolio,{
                                     sppLimits,minAccept,boundDat,PestSpp = pestMat,
                                     ProbPest = adjPestProb,
                                     SI_Class = as.numeric(input$SI_Class),
-                                    climLoss = as.numeric(input$prob_clim))
+                                    climLoss = climLoss,simCovMat = simCovMat)
       incProgress(amount = 0.6)
       print("Done Portfolio")
       #print(port_results$raw)
@@ -326,10 +352,12 @@ output$efficient_frontier <- renderPlot({
 output$growth_sim <- renderPlot({
   if(is.null(portfolio_results$data)) return(NULL)
   dat <- copy(portfolio_results$data$simulated)
+  colScale <- makeColScale_line(unique(dat$Spp))
   # dat[,It := as.factor(It)]
   dat <- dat[,.(Returns = mean(Returns)), by = .(Year,Spp)]
   ggplot(dat, aes(x = Year, y = Returns, color = Spp)) +
     geom_line() +
+    colScale +
     theme_few() + 
     expand_limits(y = 0)
 })
