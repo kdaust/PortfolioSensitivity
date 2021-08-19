@@ -7,124 +7,124 @@ output$pest_prob <- renderRHandsontable({
   rhandsontable(pestProb)
 })
 
-observeEvent(input$generate_results, priority = 100, {
-  
-  ticker <- tic("Save Map Inputs")
-  # On generate click, we are taking a snapshot of the current points
-  # and calculating results. All relevant results will be stored in the
-  # userdata environment for further reuse. User has the ability to update
-  # results on demand instead of on app state change. This reduce the load
-  # on the app and give some room in case computation get more costly
-  # in the future. Shared functions will be stored in userdata environment
-  # as well as they will be reused to build report. uData is an alias for
-  # the userdata environment.
-  
-  # Input from the app
-  avg             <- uData$avg             <- as.logical(input$aggregation)
-  rcp             <- uData$rcp             <- input$rcp_scenario
-  pts             <- uData$pts             <- userpoints$dt
-  
-  bgc             <- uData$bgc             <- bgc(pool, pts$Site, avg, rcp)
-  cciss           <- uData$cciss           <- cciss(bgc)
-  cciss_results   <- uData$cciss_results   <- cciss_results(cciss, pts, avg)
-  cciss_summary   <- uData$cciss_summary   <- cciss_summary(cciss, pts, avg)
-  
-  siterefs        <- uData$siterefs        <- sort(unique(bgc$SiteRef))
-  ss_opts <- sort(unique(uData$sspreds$SS_NoSpace))
-  bgc_opts <- unique(uData$bgc$BGC)
-  
-  ##prepare tree choices for portfolio selection
-  suitTrees <- copy(cciss_summary)
-  #print(colnames(suitTrees))
-  suitTrees <- suitTrees[NewSuit %in% c(1,2,3,4),.(Spp, BGC = ZoneSubzone)]
-  suitTrees <- unique(suitTrees)
-  tree_opts <- suitTrees[BGC == bgc_opts[1],Spp]
-  updateSelectInput(inputId = "tree_species",
-                    choices = tree_opts,selected = tree_opts)
-  uData$tree_opts <- suitTrees
-  
-  ssl <- lapply(siterefs, function(sr) {
-    ss <- sort(unique(cciss_results[SiteRef %in% sr]$SS_NoSpace))
-    names(ss) <- paste(
-      ss,
-      stocking_info$SiteSeriesName[match(ss, stocking_info[, paste(ZoneSubzone, SiteSeries, sep = "/")])]
-    )
-    ss
-  })
-  names(ssl) <- siterefs
-  
-  ssa <- sort(unique(cciss_results$SS_NoSpace))
-  names(ssa) <- paste(
-    ssa,
-    stocking_info$SiteSeriesName[match(ssa, stocking_info[, paste(ZoneSubzone, SiteSeries, sep = "/")])]
-  )
-  
-  siteseries_list <- uData$siteseries_list <- ssl
-  siteseries_all  <- uData$siteseries_all  <- ssa
-  
-  if (!isTRUE(avg)) {
-    # ordering choices to match order in points table and create a name for each choice
-    siterefs <- pts[Site %in% siterefs,
-                    {x <- Site; names(x) <- paste(ID, Site, sep = " / "); return(x)}
-    ]
-    uData$siterefs <- siterefs
-  }
-  
-  # Dynamic UI select choices that depends on previous select choice
-  siteref <- head(siterefs, 1)
-  siteseries <- siteseries_list[[siteref]]
+# observeEvent(input$generate_results, priority = 100, {
+#   
+#   ticker <- tic("Save Map Inputs")
+#   # On generate click, we are taking a snapshot of the current points
+#   # and calculating results. All relevant results will be stored in the
+#   # userdata environment for further reuse. User has the ability to update
+#   # results on demand instead of on app state change. This reduce the load
+#   # on the app and give some room in case computation get more costly
+#   # in the future. Shared functions will be stored in userdata environment
+#   # as well as they will be reused to build report. uData is an alias for
+#   # the userdata environment.
+#   
+#   # Input from the app
+#   avg             <- uData$avg             <- as.logical(input$aggregation)
+#   rcp             <- uData$rcp             <- input$rcp_scenario
+#   pts             <- uData$pts             <- userpoints$dt
+#   
+#   bgc             <- uData$bgc             <- bgc(pool, pts$Site, avg, rcp)
+#   cciss           <- uData$cciss           <- cciss(bgc)
+#   cciss_results   <- uData$cciss_results   <- cciss_results(cciss, pts, avg)
+#   cciss_summary   <- uData$cciss_summary   <- cciss_summary(cciss, pts, avg)
+#   
+#   siterefs        <- uData$siterefs        <- sort(unique(bgc$SiteRef))
+#   ss_opts <- sort(unique(uData$sspreds$SS_NoSpace))
+#   bgc_opts <- unique(uData$bgc$BGC)
+#   
+#   ##prepare tree choices for portfolio selection
+#   suitTrees <- copy(cciss_summary)
+#   #print(colnames(suitTrees))
+#   suitTrees <- suitTrees[NewSuit %in% c(1,2,3,4),.(Spp, BGC = ZoneSubzone)]
+#   suitTrees <- unique(suitTrees)
+#   tree_opts <- suitTrees[BGC == bgc_opts[1],Spp]
+#   updateSelectInput(inputId = "tree_species",
+#                     choices = tree_opts,selected = tree_opts)
+#   uData$tree_opts <- suitTrees
+#   
+#   ssl <- lapply(siterefs, function(sr) {
+#     ss <- sort(unique(cciss_results[SiteRef %in% sr]$SS_NoSpace))
+#     names(ss) <- paste(
+#       ss,
+#       stocking_info$SiteSeriesName[match(ss, stocking_info[, paste(ZoneSubzone, SiteSeries, sep = "/")])]
+#     )
+#     ss
+#   })
+#   names(ssl) <- siterefs
+#   
+#   ssa <- sort(unique(cciss_results$SS_NoSpace))
+#   names(ssa) <- paste(
+#     ssa,
+#     stocking_info$SiteSeriesName[match(ssa, stocking_info[, paste(ZoneSubzone, SiteSeries, sep = "/")])]
+#   )
+#   
+#   siteseries_list <- uData$siteseries_list <- ssl
+#   siteseries_all  <- uData$siteseries_all  <- ssa
+#   
+#   if (!isTRUE(avg)) {
+#     # ordering choices to match order in points table and create a name for each choice
+#     siterefs <- pts[Site %in% siterefs,
+#                     {x <- Site; names(x) <- paste(ID, Site, sep = " / "); return(x)}
+#     ]
+#     uData$siterefs <- siterefs
+#   }
+#   
+#   # Dynamic UI select choices that depends on previous select choice
+#   siteref <- head(siterefs, 1)
+#   siteseries <- siteseries_list[[siteref]]
+# 
+#   updateSelectInput(inputId = "port_bgc", choices = bgc_opts, select = bgc_opts[1])
+# 
+#   session$sendCustomMessage(type="jsCode", list(
+#     code= "$('#download_report_span').show()"))
+#   session$sendCustomMessage(type="jsCode", list(
+#     code= "$('#download_data_span').show()"))
+#   session$sendCustomMessage(type="jsCode", list(
+#     code= "$('#generate_results').prop('disabled', true)"))
+#   updateActionButton(inputId = "generate_results", label = "Refresh results")
+#   
+#   # Render models info + timings in About
+# })
 
-  updateSelectInput(inputId = "port_bgc", choices = bgc_opts, select = bgc_opts[1])
-
-  session$sendCustomMessage(type="jsCode", list(
-    code= "$('#download_report_span').show()"))
-  session$sendCustomMessage(type="jsCode", list(
-    code= "$('#download_data_span').show()"))
-  session$sendCustomMessage(type="jsCode", list(
-    code= "$('#generate_results').prop('disabled', true)"))
-  updateActionButton(inputId = "generate_results", label = "Refresh results")
-  
-  # Render models info + timings in About
-})
-
-generateState <- function() {
-  # This prevent the generate button from being enabled when
-  # points do not have valid geometry. There is another
-  # validation in new_points to make sure the newly
-  # added points are located inside the cciss geometry.
-  # Only valid points are used to calculated
-  if (nrow(userpoints$dt[!is.na(Long) & !is.na(Lat)])) {
-    session$sendCustomMessage(type="jsCode", list(code= "$('#generate_results').prop('disabled', false)"))
-  } else {
-    session$sendCustomMessage(type="jsCode", list(code= "$('#generate_results').prop('disabled', true)"))
-  }
-}
-
-# These are the triggers to check if we need to change button state
-observeEvent(userpoints$dt, {generateState()})
-observeEvent(input$aggregation, {generateState()})
-observeEvent(input$rcp_scenario, {generateState()})
-
-# Data processing
-bgc <- function(con, siteno, avg, rcp) {
-  siteno <- siteno[!is.na(siteno)]
-  withProgress(message = "Processing...", detail = "Futures", {
-    dbGetCCISS(con, siteno, avg, rcp)
-  })
-}
-
-##bgc <- dbGetCCISS(pool,siteno = c(4532735,4546791,4548548),avg = T, scn = "ssp370")
-# bgc <- sqlTest(pool,siteno = c(6476259,6477778,6691980,6699297),avg = T, scn = "ssp370")
-
-cciss <- function(bgc) {
-  SSPred <- edatopicOverlap(bgc, Edatope = E1)
-  setorder(SSPred,SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,-SSratio)
-  uData$eda_out <- SSPred
-  SSPred2 <- SSPred[,.(SSLab = paste(SS.pred,collapse = "<br>")), 
-                    by = .(SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,BGC.prop)]
-  uData$sspreds <- SSPred2
-  ccissOutput(SSPred = SSPred, suit = S1, rules = R1, feasFlag = F1) ##prob don't need this
-}
+# generateState <- function() {
+#   # This prevent the generate button from being enabled when
+#   # points do not have valid geometry. There is another
+#   # validation in new_points to make sure the newly
+#   # added points are located inside the cciss geometry.
+#   # Only valid points are used to calculated
+#   if (nrow(userpoints$dt[!is.na(Long) & !is.na(Lat)])) {
+#     session$sendCustomMessage(type="jsCode", list(code= "$('#generate_results').prop('disabled', false)"))
+#   } else {
+#     session$sendCustomMessage(type="jsCode", list(code= "$('#generate_results').prop('disabled', true)"))
+#   }
+# }
+# 
+# # These are the triggers to check if we need to change button state
+# observeEvent(userpoints$dt, {generateState()})
+# observeEvent(input$aggregation, {generateState()})
+# observeEvent(input$rcp_scenario, {generateState()})
+# 
+# # Data processing
+# bgc <- function(con, siteno, avg, rcp) {
+#   siteno <- siteno[!is.na(siteno)]
+#   withProgress(message = "Processing...", detail = "Futures", {
+#     dbGetCCISS(con, siteno, avg, rcp)
+#   })
+# }
+# 
+# ##bgc <- dbGetCCISS(pool,siteno = c(4532735,4546791,4548548),avg = T, scn = "ssp370")
+# # bgc <- sqlTest(pool,siteno = c(6476259,6477778,6691980,6699297),avg = T, scn = "ssp370")
+# 
+# cciss <- function(bgc) {
+#   SSPred <- edatopicOverlap(bgc, Edatope = E1)
+#   setorder(SSPred,SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,-SSratio)
+#   uData$eda_out <- SSPred
+#   SSPred2 <- SSPred[,.(SSLab = paste(SS.pred,collapse = "<br>")), 
+#                     by = .(SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,BGC.prop)]
+#   uData$sspreds <- SSPred2
+#   ccissOutput(SSPred = SSPred, suit = S1, rules = R1, feasFlag = F1) ##prob don't need this
+# }
 
 #####portfolio#####
 makeColScale <- function(Trees){ ##make a new one of these for the line graphs

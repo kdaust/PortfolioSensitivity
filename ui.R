@@ -16,20 +16,13 @@ ui <- fluidPage(theme = shinytheme("lumen"),
                                     DT::DTOutput("points_table", width="100%"),
                                     
                                     # Control results
-                                    splitLayout(
-                                      checkboxGroupInput(
-                                        "rcp_scenario",
-                                        "RCP Scenario:",
-                                        selected = c("ssp126","ssp245","ssp370"),
-                                        c("2.6 W/m2" = "ssp126", "4.5 W/m2" = "ssp245", "7.0 W/m2" = "ssp370", "8.5 W/m2" = "ssp585")
-                                      ),
+                               
                                       radioButtons(
                                         "aggregation",
                                         "Multiple Point Aggregation:",
                                         c("Individual" = "FALSE", "Averaged by BGC Zone" = "TRUE")
-                                      )
-                                    ),
-                                    
+                                      ),
+
                                     # Generate results
                                     actionButton("generate_results", label = "Generate results", icon = icon("plus-square"),
                                                  style = "width:100%; background-color:#003366; color: #FFF")

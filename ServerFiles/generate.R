@@ -1,6 +1,4 @@
 observeEvent(input$generate_results, priority = 100, {
-
-  ticker <- tic("Save Map Inputs")
   # On generate click, we are taking a snapshot of the current points
   # and calculating results. All relevant results will be stored in the
   # userdata environment for further reuse. User has the ability to update
@@ -12,22 +10,20 @@ observeEvent(input$generate_results, priority = 100, {
   
   # Input from the app
   avg             <- uData$avg             <- as.logical(input$aggregation)
-  rcp             <- uData$rcp             <- input$rcp_scenario
   pts             <- uData$pts             <- userpoints$dt
   
-  # Results from processing
-  tic("Fetch CCISS Data from DB", ticker)
-  bgc             <- uData$bgc             <- bgc(pool, pts$Site, avg, rcp)
-  tic("Process CCISS data", ticker)
-  cciss           <- uData$cciss           <- cciss(bgc)
-  tic("Format CCISS Results", ticker)
+
+  bgc             <- uData$bgc             <- bgc(pool, pts$Site, avg, all_weight)
+
+  cciss           <- uData$cciss           <- cciss(bgc, c(0.3,0.35,0.35),c(0.5,0.5))
+
   cciss_results   <- uData$cciss_results   <- cciss_results(cciss, pts, avg)
-  tic("Format CCISS Summary", ticker)
+
   cciss_summary   <- uData$cciss_summary   <- cciss_summary(cciss, pts, avg)
   
   
   # UI select choices
-  tic("Determine UI choices", ticker)
+
   
   siterefs        <- uData$siterefs        <- sort(unique(bgc$SiteRef))
   ss_opts <- sort(unique(uData$sspreds$SS_NoSpace))
@@ -74,7 +70,6 @@ observeEvent(input$generate_results, priority = 100, {
   siteref <- head(siterefs, 1)
   siteseries <- siteseries_list[[siteref]]
 
-  tic("Populate UI choices", ticker)
   updateSelectInput(inputId = "siteref_feas", choices = siterefs, selected = siteref)
   updateSelectInput(inputId = "siteref_bgc_fut", choices = siterefs, selected = siteref)
   updateSelectInput(inputId = "ss_bgc_fut", choices = siteseries, selected = siteseries[1])
@@ -85,7 +80,6 @@ observeEvent(input$generate_results, priority = 100, {
   updateCheckboxGroupInput(inputId = "report_filter",choices = siteseries_all, selected = siteseries_all)
   
   # Use UI injected javascript to show download button and hide generate button
-  tic("Inject javascript", ticker)
   session$sendCustomMessage(type="jsCode", list(
     code= "$('#download_report_span').show()"))
   session$sendCustomMessage(type="jsCode", list(
@@ -94,7 +88,6 @@ observeEvent(input$generate_results, priority = 100, {
     code= "$('#generate_results').prop('disabled', true)"))
   updateActionButton(inputId = "generate_results", label = "Refresh results")
   
-  tocker <- toc(ticker)
   
   # Render models info + timings in About
   output$modelsinfo <- function() {
@@ -124,25 +117,22 @@ observeEvent(input$aggregation, {generateState()})
 observeEvent(input$rcp_scenario, {generateState()})
 
 # Data processing
-bgc <- function(con, siteno, avg, rcp) {
+bgc <- function(con, siteno, avg, modWeights) {
   siteno <- siteno[!is.na(siteno)]
-  withProgress(message = "Processing...", detail = "Futures", {
-    dbGetCCISS(con, siteno, avg, rcp)
-  })
+    dbGetCCISS(con, siteno, avg, modWeights = modWeights)
+
 }
 
-##bgc <- dbGetCCISS(pool,siteno = c(4532735,4546791,4548548),avg = T, scn = "ssp370")
+##bgc <- dbGetCCISS(pool,siteno = c(4532735,4546791,4548548),avg = T, all_weight)
 # bgc <- sqlTest(pool,siteno = c(6476259,6477778,6691980,6699297),avg = T, scn = "ssp370")
 
 
-cciss <- function(bgc) {
+cciss <- function(bgc,estabWt,midWt) {
   SSPred <- edatopicOverlap(bgc, Edatope = E1)
   setorder(SSPred,SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,-SSratio)
   uData$eda_out <- SSPred
-  SSPred2 <- SSPred[,.(SSLab = paste(SS.pred,collapse = "<br>")), 
-                    by = .(SiteRef,SS_NoSpace,FuturePeriod,BGC.pred,BGC.prop)]
-  uData$sspreds <- SSPred2
-  ccissOutput(SSPred = SSPred, suit = S1, rules = R1, feasFlag = F1)
+  ccissOutput(SSPred = SSPred, suit = S1, rules = R1, feasFlag = F1, 
+              histWeights = estabWt, midWeights = midWt)
 }
 
 #SSPred2 <- SSPred[SS_NoSpace == "ICHmw1/01",]
